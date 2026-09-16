@@ -1,4 +1,4 @@
 1. ユーザー権限定義書（Role-Based Access Control / RBAC）
 2. 業務要件書（Business Requirements Document） 
 3. 画面・機能要件一覧（Screen & Functional Requirements） 
-4. UI/UX要求・制約事項（UI/UX Requirements & Constraints）
+4. UI/UX設計・制約事項（UI/UX Requirements & Constraints）

@@ -1,10 +1,5 @@
 # ShrimpOS — Agentic SDLC 基本設計
 
-**Version:** 1.0  
-**Project:** ShrimpOS  
-**Scope:** Agentic SDLC  
-**Team:** 2名
-
 ---
 
 # 1. 概要
