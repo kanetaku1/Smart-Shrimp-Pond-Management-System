@@ -1,4 +1,5 @@
 # ユーザー権限定義書
+
 **Role-Based Access Control / RBAC**
 
 ## 1. 目的
@@ -22,11 +23,11 @@ Smart Shrimp Pond Management Systemにおける、ユーザーRoleと基本的�
 
 本システムでは、以下の3 Roleを業務ユーザーとして定義する。
 
-| Role | 役割 |
-|---|---|
-| **Farms Manager** | 複数のFarmを統括し、養殖事業全体の経営・生産判断を行う |
+| Role                  | 役割                                                   |
+| --------------------- | ------------------------------------------------------ |
+| **Farms Manager**     | 複数のFarmを統括し、養殖事業全体の経営・生産判断を行う |
 | **Technical Manager** | 担当Farm・Pondの状態を管理し、技術・運用上の判断を行う |
-| **Field Operator** | Farm・Pondで必要な現場作業を実行する |
+| **Field Operator**    | Farm・Pondで必要な現場作業を実行する                   |
 
 ---
 
@@ -34,29 +35,29 @@ Smart Shrimp Pond Management Systemにおける、ユーザーRoleと基本的�
 
 ユーザー権限は以下の4種類とする。
 
-| Permission | 意味 |
-|---|---|
-| **View** | 情報を閲覧する |
+| Permission      | 意味                           |
+| --------------- | ------------------------------ |
+| **View**        | 情報を閲覧する                 |
 | **Acknowledge** | Alert / Notificationを確認する |
-| **Decide** | 業務上の判断を行う |
-| **Execute** | 許可された操作・作業を実行する |
+| **Decide**      | 業務上の判断を行う             |
+| **Execute**     | 許可された操作・作業を実行する |
 
 ---
 
 ## 4. Role × Permission
 
-| 対象 | Farms Manager | Technical Manager | Field Operator |
-|---|---|---|---|
-| Company情報 | View / Decide | - | - |
-| Farm情報 | View / Decide | View | - |
-| Pond情報 | View | View / Decide | - |
-| IoT情報 | View | View | - |
-| Alert / Notification | Acknowledge | View / Acknowledge / Decide | - |
-| AI Recommendation | View / Decide | View / Decide | - |
-| 生産・収穫情報 | View / Decide | View / Decide | - |
-| 在庫・供給情報 | View / Decide | View | - |
-| 現場作業 | - | Decide | Execute |
-| Actuator操作 | - | Execute* | - |
+| 対象                 | Farms Manager                | Technical Manager           | Field Operator |
+| -------------------- | ---------------------------- | --------------------------- | -------------- |
+| Company情報          | View / Decide                | -                           | -              |
+| Farm情報             | View / Decide                | View                        | -              |
+| Pond情報             | View                         | View / Decide               | -              |
+| IoT情報              | View（集約値・分析結果のみ） | View（担当Farmの詳細値）    | -              |
+| Alert / Notification | Acknowledge                  | View / Acknowledge / Decide | -              |
+| AI Recommendation    | View / Decide                | View / Decide               | -              |
+| 生産・収穫情報       | View / Decide                | View / Decide               | -              |
+| 在庫・供給情報       | View / Decide                | View                        | -              |
+| 現場作業             | -                            | Decide                      | Execute        |
+| Actuator操作         | -                            | Execute\*                   | -              |
 
 \* Technical ManagerのActuator操作は、Safety Layer等による許可範囲内に限定する。
 
@@ -68,13 +69,15 @@ Smart Shrimp Pond Management Systemにおける、ユーザーRoleと基本的�
 
 - Company全体の情報を閲覧できる
 - 管轄する複数Farmの情報を閲覧できる
-- FarmからPondへ詳細情報を参照できる
+- FarmからPondへ集約KPI、分析根拠、トレンド要約を参照できる
+- 生センサー値・詳細な現場入力値は閲覧できない
 - Pondの現場操作は行わない
 
 ### Technical Manager
 
 - 担当Farmの情報を閲覧・管理できる
 - 担当Farm内のPond情報を閲覧できる
+- 担当Farm内のPondについて、IoT詳細値、日次・週次入力、アラート詳細を閲覧できる
 - Pondの技術・運用上の判断を行う
 - 許可された範囲でActuatorを操作できる
 
