@@ -173,18 +173,35 @@ https://www.fao.org/4/AC210E/AC210E00.htm
 
 ## 4.3 System Objectives
 
-1. 養殖池環境をリアルタイムに把握する
+1. 3〜5分間隔のセンサーデータを、取得時刻とデータ品質付きで把握する
 2. 水質・水環境データを長期蓄積する
 3. 天候・大気環境を取得する
 4. 餌・給餌情報を記録する
 5. 養殖管理情報を記録する
 6. 複数データソースを統合する
 7. 推奨閾値で異常を検知する
-8. 異常時に管理者へ通知する
+8. 異常時に対象範囲のTechnical Managerへ通知し、Farms Managerには集約結果を表示する
 9. MLで将来の環境リスクを予測する
 10. 環境悪化前に通知できる状態を目指す
 11. AI Agentで状況を統合し推奨アクションを提示する
 12. 将来的にポンプ等の自動制御へ接続する
+
+## 4.4 Official Roles and Access Boundary
+
+本システムの正式なユーザーRoleは以下の4つとする。
+
+| Role | 主な責務 | 主なデータ範囲 |
+| --- | --- | --- |
+| Farms Manager | Company全体の経営・生産判断 | 複数Estate / Farmの集約KPI、分析結果、アラート。生センサー値は表示しない |
+| Technical Manager | 担当Farmの技術・運用判断 | 担当Farm内のPond、IoT詳細値、報告、アラート、Recommendation、許可された制御操作 |
+| Field Operator | 現場作業の実行 | 割り当てられた作業に必要な範囲。今回の主要UI対象外 |
+| System Administrator | ユーザー、Role、システム設定の管理 | 管理対象の設定・監査情報。業務上の分析判断は行わない |
+
+`Farmer` はユーザーRoleとして使用せず、画面文言では具体的なRole名を使用する。AI Agent、ML、Safety Layerはユーザーではなくシステムコンポーネントである。認証後のAPIでは、Roleに加えてEstate / Farm / Pondの所属範囲を必ず検証する。
+
+## 4.5 Scope and Release Boundary
+
+本設計書における初期実装の対象は、観測・記録・説明可能な集約・人間による確認である。AIはRecommendationを提示できるが、Actuatorを直接操作しない。本番実機の自動制御は初期実装の対象外とし、制御機能はシミュレーションまたはモック機器で検証する。実機制御の導入には、別途Safety Review、受入試験、運用手順、緊急停止手順の承認を必要とする。
 
 ---
 
@@ -455,19 +472,32 @@ Frontend / ML / Agent
 ## 9.2 Database Entities
 
 ```text
-Farm
- └── Pond
+Estate
+ └── Farm
+  └── Pond
       ├── Sensor
       ├── Pump
       ├── Telemetry
       ├── EnvironmentalData
       ├── FeedRecord
       ├── OperationRecord
+      ├── DailyReport
+      ├── WeeklySampling
+      ├── ProductionKPI
+      ├── HarvestScenario
+      ├── InventoryForecast
       ├── Alert
       ├── Prediction
       ├── ControlAction
-      └── ProductionRecord
+      ├── ProductionRecord
+      └── AuditLog
 ```
+
+    日次報告には報告日、報告者、養殖日数、天候、推定生存数、当日の死亡数、死亡エビ回収数、給餌量、エサ残り、特記事項を保持する。週次サンプリングにはサンプリング日時、サンプリング尾数、合計重量を保持する。確定済み報告の修正は履歴を残し、重複報告を防止する。
+
+    週次サンプリング等から、ABW、ADG、SR、Biomass、FCR、COGSを算出する。算出式、分母、費用に含める項目、未確定データの扱いは業務ルールとして別途確定し、KPIには実績・推定の区別と算出根拠を保持する。
+
+    収益シミュレーションと将来在庫予測では、サイズ別数量、収穫推奨日、価格、費用、予測期間、供給確度、安全余裕、出荷可能量を保持する。利益の定義と「予測値」と「安全余裕控除後の販売可能量」の扱いは、企業合意後に確定する。
 
 ---
 
@@ -499,6 +529,8 @@ Farm
 - Timestamp errors
 - Calibration
 - Communication loss
+
+保存時刻はUTCで統一し、画面表示はWIB（UTC+7）へ変換する。センサー値には取得時刻、受信時刻、品質状態、欠損・遅延状態を付与する。センサー計測・送信は3〜5分間隔を基本とし、許容遅延、ローカルバッファ期間、復旧後の再送方式は運用設定として定義する。
 
 ```text
 Raw Data
@@ -607,10 +639,12 @@ Alert Engine
 
 ## 13.2 Levels
 
-- Normal
-- Watch
-- Warning
-- Critical
+- Normal（正常）
+- Attention（注意）
+- Warning（警告）
+- Critical（重大）
+
+重要度（Severity）とアラート処理状態（Lifecycle Status）は別項目として管理する。処理状態は `未確認`、`確認済み`、`対応中`、`解決済み` とし、状態変更者、変更時刻、対応履歴を記録する。`Attention` は画面上では「注意」と表示し、`Watch` は正式な状態名として使用しない。
 
 ## 13.3 Context-aware Threshold
 
@@ -680,38 +714,40 @@ Notification
 
 ## 15.1 Main Dashboard
 
-管理者が一目で池の状態を把握できる。
+Farms ManagerがEstate / Farmを横断して、経営・生産上の要対応事項を把握できる。生センサー値は表示せず、集約KPI、健康スコア、収益分析、将来在庫、アラート、分析根拠を表示する。
 
 ```text
 ┌──────────────────────────────┐
 │       SHRIMP POND             │
 ├──────────────────────────────┤
-│ Overall Status     Watch      │
+│ Overall Status     Attention  │
 ├──────────────────────────────┤
-│ pH          7.8               │
-│ Temperature 28.4°C            │
-│ TDS         1850 ppm          │
-│ Turbidity   32 NTU            │
-│ Water Level 82 cm              │
-│ DO          5.6 mg/L          │
+│ Healthy Ponds       42        │
+│ Attention Ponds      5        │
+│ Warning Ponds        2        │
+│ Recommended Harvest  3 ponds  │
+│ Forecast Supply      12.4 t   │
 ├──────────────────────────────┤
-│ Future Risk       68%         │
+│ Priority Alerts      2        │
 ├──────────────────────────────┤
 │ Recommended Action             │
-│ Check water condition          │
+│ Review Pond P-021              │
 └──────────────────────────────┘
 ```
 
 ## 15.2 Views
 
-- Current Status
-- Historical Data
-- Prediction
-- Alerts
-- Pump Status
-- AI Recommendation
-- Alert History
-- Feed / Operation History
+- Company Dashboard（Farms Manager）
+- Revenue Simulation（Farms Manager）
+- Biological Risk and Alerts（Farms Manager）
+- Future Inventory Calendar（Farms Manager）
+- Pond Drill-down（集約値・分析根拠のみ）
+- Farm Pond Monitoring（Technical Manager）
+- Alert Confirmation（Technical Manager）
+- Threshold Configuration（Technical Manager / System Administrator）
+- AI Prediction Advice（Technical Manager）
+- Daily Report / Weekly Sampling / Report History
+- Automatic Control Monitoring（Technical Manager）
 
 ---
 
@@ -758,22 +794,29 @@ Farm Operation
 
 ## 17.2 Target Variables
 
-### Phase 1
+### Phase 1: Rule-based visibility and explainable management
 
-- Environmental anomaly
-- Risk classification
+- IoT ingestion at 3〜5 minute intervals
+- Daily and weekly report input
+- ABW / ADG / SR / Biomass / FCR / COGS calculation
+- Revenue simulation and recommended harvest date
+- Future inventory and size-based supply forecast
+- Rule-based threshold alert
 
-### Phase 2
+### Phase 2: Biological risk and predictive support
 
-- Future sensor values
-- Future environmental condition
+- Environmental anomaly detection
+- Health score and risk classification
+- Future sensor/environment prediction
+- Predictive alert and AI Recommendation
 
-### Phase 3
+### Phase 3: Advanced prediction and controlled verification
 
-- Shrimp growth
-- Biomass
-- Survival
-- Harvest volume
+- Shrimp growth, biomass, survival, and harvest volume prediction
+- Digital-twin and mock-device control verification
+- Evaluation for possible real-device supervised control
+
+収益、在庫、リスクの予測値には、対象期間、実績・推定・予測の区別、主要因、データ更新時刻を付与する。学習データ不足時は未評価または算出不能として表示し、値を推測して補完しない。
 
 ---
 
@@ -893,7 +936,7 @@ get_predictions()
 get_pump_status()
 create_alert()
 generate_recommendation()
-request_control()
+create_control_proposal()
 generate_daily_report()
 ```
 
@@ -918,25 +961,15 @@ Event / User Request
         ↓
     Safety Check
         ↓
-┌───────┴────────┐
-▼                ▼
-Notify Farmer   Control Request
-                   │
-                   ▼
-              Safety Layer
-                   │
-                   ▼
-                  PID
-                   │
-                   ▼
-                 Pump
-                   │
-                   ▼
-                 Pond
-                   │
-                   ▼
-                Sensors
-                   ↺
+┌──────────────┴──────────────┐
+▼                             ▼
+Notify Technical Manager   Create Control Proposal
+                                │
+                                ▼
+                  Human Approval / Safety Review
+                                │
+                                ▼
+                 Simulation or Mock Device Only
 ```
 
 ---
@@ -972,10 +1005,10 @@ Agent
  ↓
 Recommended Action
  ↓
-Farmer
+Technical Manager
 ```
 
-## Level 4 — Supervised Control
+## Level 4 — Supervised Control (simulation / mock only in current scope)
 
 ```text
 Agent
@@ -991,7 +1024,7 @@ PID
 Pump
 ```
 
-## Level 5 — Autonomous Control
+## Level 5 — Autonomous Control (future scope only)
 
 ```text
 Agent
@@ -1003,7 +1036,7 @@ PID
 Pump
 ```
 
-2か月の開発では**Level 2～3を主要目標**とし、Level 4を可能な範囲で実証する。Level 5は将来構想とする。
+初期実装では**Level 2〜3を主要目標**とする。Level 4はシミュレーションまたはモック機器に限定して検証し、Level 5は将来構想とする。本番実機への制御命令は初期実装から除外する。
 
 ---
 
@@ -1641,7 +1674,7 @@ AgentとHardwareをSafety Layerで分離する。
                            │
                     ┌──────┴──────┐
                     ▼             ▼
-                 Farmer        Safety
+                 Technical Manager    Safety
                                   │
                                   ▼
                                  PID
@@ -1702,7 +1735,7 @@ AgentとHardwareをSafety Layerで分離する。
                   │
           ┌───────┴────────┐
           ▼                ▼
-       Farmer           Control
+    Technical Manager   Control Proposal
                            │
                          Safety
                            │
